@@ -42,7 +42,7 @@ static char *wc_to_utf8(PWCHAR wc_buffer, ULONG wc_bytes)
 	wc_str[wc_length] = 0;
 
 	/* Compute the size of the UTF-8 converted string. */
-	if (!(utf8_bytes = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wc_str, -1,
+	if (!(utf8_bytes = WideCharToMultiByte(CP_UTF8, 0, wc_str, -1,
 	                                 NULL, 0, NULL, NULL)))
 		goto wc_to_utf8_end;
 
@@ -51,7 +51,7 @@ static char *wc_to_utf8(PWCHAR wc_buffer, ULONG wc_bytes)
 		goto wc_to_utf8_end;
 
 	/* Actually converted to UTF-8. */
-	if (!WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wc_str, -1,
+	if (!WideCharToMultiByte(CP_UTF8, 0, wc_str, -1,
 	                         utf8_str, utf8_bytes, NULL, NULL)) {
 		free(utf8_str);
 		utf8_str = NULL;
@@ -142,7 +142,7 @@ static char *get_string_descriptor(HANDLE hub_device, ULONG connection_index,
 	desc_req->ConnectionIndex = connection_index;
 	desc_req->SetupPacket.wValue = (USB_STRING_DESCRIPTOR_TYPE << 8)
 	                               | descriptor_index;
-	desc_req->SetupPacket.wIndex = 0;
+	desc_req->SetupPacket.wIndex = 0x0409;
 	desc_req->SetupPacket.wLength = (USHORT) (size - sizeof(*desc_req));
 
 	if (!DeviceIoControl(hub_device,
@@ -467,11 +467,13 @@ SP_PRIV enum sp_return get_port_details(struct sp_port *port)
 			if (!(escaped_port_name = malloc(strlen(port->name) + 5)))
 				RETURN_ERROR(SP_ERR_MEM, "Escaped port name malloc failed");
 			sprintf(escaped_port_name, "\\\\.\\%s", port->name);
-			handle = CreateFileA(escaped_port_name, GENERIC_READ, 0, 0,
+			handle = CreateFileA(escaped_port_name, GENERIC_READ,
+			                     FILE_SHARE_READ | FILE_SHARE_WRITE, 0,
 			                     OPEN_EXISTING,
 			                     FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED, 0);
 			free(escaped_port_name);
-			CloseHandle(handle);
+			if (handle != INVALID_HANDLE_VALUE)
+				CloseHandle(handle);
 
 			/* Retrieve USB device details from the device descriptor. */
 			get_usb_details(port, device_info_data.DevInst);
